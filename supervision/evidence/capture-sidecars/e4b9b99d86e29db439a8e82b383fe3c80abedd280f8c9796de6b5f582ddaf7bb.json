@@ -1,0 +1,12 @@
+{
+  "sha256": "e4b9b99d86e29db439a8e82b383fe3c80abedd280f8c9796de6b5f582ddaf7bb",
+  "stored_as": "data/captures/e4b9b99d86e29db439a8e82b383fe3c80abedd280f8c9796de6b5f582ddaf7bb.jpg",
+  "original_filename": "2026-09-12T05-05-50-640Z.jpg",
+  "bytes": 2626917,
+  "width": 4032,
+  "height": 3024,
+  "content_type": "image/jpeg",
+  "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1",
+  "received_at": "2026-09-12T05:05:50.642Z",
+  "note": "ingested from P-002 raw upload directory"
+}

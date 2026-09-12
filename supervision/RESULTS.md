@@ -61,3 +61,48 @@ Append-only. Never edit or delete an existing entry; supersede it with a new one
 - **Claim:** The photograph is a ceiling-mounted air-conditioning cassette shot from several metres below; no label is legible at that distance.
 - **Evidence:** Direct inspection of `supervision/evidence/proof-extract-input.jpg`; the model itself returned only a brand mark and set `confidence` 0.80–0.85.
 - **Caveat:** All `label_text` conclusions from this packet inherit this limitation and must be re-run against a close-up label.
+
+### R-0012 — RULING: P-001 is ACCEPTED
+- **Claim:** The supervisor ruled P-001 ACCEPTED on 2026-09-12 at commit `737c33f`, covering results R-0001..R-0011.
+- **Evidence:** Packet P-002, "Supervisor rulings to record before work", item 1: "P-001 is ACCEPTED (commit `737c33f`, R-0001..R-0011)."
+- **Caveat:** Three caveats are carried forward explicitly and remain open: (a) the `ANTHROPIC_API_KEY` is present but has never been exercised and is unproven; (b) OCR fidelity is unmeasured — no close-up label has been extracted; (c) the `capture="environment"` picker observation (R-0006) is browser-specific and does not generalise until reproduced in Safari proper.
+
+### R-0013 — RULING: fidelity is measured in code against pre-declared ground truth
+- **Claim:** Extraction fidelity is to be measured deterministically in code against ground truth the USER types before any extraction runs. The model is never asked to grade itself, and the user is never asked to grade the model's output after having seen it.
+- **Evidence:** Packet P-002, "Supervisor rulings to record before work", item 2.
+- **Caveat:** This constrains method, not outcome. A post-hoc user judgement is still admissible for one purpose only — naming fabricated values the model produced (the hallucination check, packet step 8) — because that question cannot be answered from ground truth typed in advance.
+
+### R-0014 — RULING: P-003's model, resolution and schema are chosen from P-002's numbers
+- **Claim:** The extraction model, the image resolution, and the schema version that P-003 builds on are to be selected from this packet's measurements, not from preference or convenience.
+- **Evidence:** Packet P-002, "Supervisor rulings to record before work", item 3.
+- **Caveat:** If the matrix does not separate the candidates on fidelity, the recommendation must say so and fall back to a stated tiebreak (cost) rather than assert a distinction the numbers do not support.
+
+### R-0015 — In Safari proper, `capture="environment"` DID open the camera directly (supersedes the generalisation of R-0006)
+- **Claim:** The picker seen in P-001 was the Google app's in-app browser behaving differently, not iOS behaviour. In Safari proper the same `<input type="file" accept="image/*" capture="environment">` opened the camera directly.
+- **Evidence:** Three uploads at 2026-09-12T05:05:50Z, 05:06:13Z and 05:06:23Z carried user-agent `Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Mobile/15E148 Safari/604.1` — a `Version/` token and no `GSA` token, i.e. Safari, not the Google app. Asked what happened when they tapped the input, the user answered: "yes it did open the camera directly".
+- **Caveat:** R-0006 is not wrong and is not retracted — the picker really did appear in the Google-app WebView (`GSA/437.4`). What changes is its scope: the behaviour is browser-specific, so the capture page must not assume a direct viewfinder when opened from an in-app browser. Note also that the Safari user-agent reports `iPhone OS 18_7` while the Google-app user-agent on the same handset reported `iPhone OS 26_5_2`; at least one of the two is a frozen/spoofed UA string, so the UA is not a reliable source of OS version.
+
+### R-0016 — RULING: ground truth may be known by construction (amends R-0013, does not waive it)
+- **Claim:** Ground truth must still exist before extraction and must still never be a model's or the Runner's reading of a photograph. It MAY, however, be established by construction: text the Runner generates, records with a timestamp, renders, and the user photographs. The three captures taken before this ruling (AC medium, AC close, poster wall) have NO ground truth and are scored for consistency only; no accuracy claim may be made about them anywhere in this packet or any later one.
+- **Evidence:** Packet P-002A, "Supervisor rulings to record before work", item 4, issued on the Runner's report that ground truth was blocking and the user's statement that they could not type it.
+- **Caveat:** Constructed ground truth measures transcription of screen-rendered text, not of physical packaging. Print on a real package differs in ways that matter — curved surfaces, reflective foil, small condensed type, colour-on-colour — and a screen adds moiré and backlight that print does not. A fidelity number from this packet therefore bounds nothing about real packaging and must not be quoted as if it did.
+
+### R-0017 — RULING: captures are content-addressed and originals are immutable
+- **Claim:** Every capture is stored at its exact original bytes under `data/captures/<sha256>.<ext>` with a sidecar `<sha256>.json` recording original filename, bytes, width, height, content-type, user-agent and received-at. The original file is never rewritten. The downscaled copy is a derivative at `data/derived/<sha256>.1568.jpg`, used for inference only. Every extraction result records BOTH the original and the derived sha256. `data/` is git-ignored; sidecars are copied into `supervision/evidence/` because they contain no pixels.
+- **Evidence:** Packet P-002A, item 5.
+- **Caveat:** Content addressing makes a byte-identical re-upload collapse onto the same record, so two genuinely separate photographs of the same scene are distinguishable only if their bytes differ — which JPEG capture makes near-certain, but which is not guaranteed. Immutability is enforced by convention and verified by re-hashing at the end of the packet; nothing in the filesystem prevents a later process from overwriting a capture.
+
+### R-0018 — RULING: the three existing photos and the second model are confirmed; do not re-ask
+- **Claim:** The supervisor records that the user has, in this session, confirmed the three existing photographs as the unlabelled set and confirmed the choice of `anthropic/claude-sonnet-4.6` as the second model. The Runner is not to re-ask.
+- **Evidence:** Packet P-002A, item 6. In-session basis: the Runner reported the three photos' limitations in detail and named the second model with its prices; the user replied "ok continue now" and, separately, "yes it did open the camera directly", and raised no objection to either.
+- **Caveat:** This is a supervisor ruling recorded as such, not a verbatim user confirmation. The user never uttered the words "I confirm the three photos" or named the model; their assent is inferred from twice instructing the Runner to continue after being shown what the photos contain. Anyone relying on this entry should read it as the supervisor closing the question, not as direct user testimony.
+
+### R-0019 — RULING: P-002A is CANCELLED; fidelity remains UNMEASURED and is an open ledger item
+- **Claim:** P-002A was cancelled before its first model call. Extraction fidelity has never been measured against ground truth of any kind. No accuracy claim may appear in the product UI, the README, or any report. Ruling 5 of P-002A (R-0017 — originals preserved by sha256, derivatives for inference only) stands and now applies to the product, not only to the evidence directory.
+- **Evidence:** Packet P-003, "Supervisor rulings to record before work", item 7.
+- **Caveat:** Cancellation leaves the model choice (`google/gemini-3.8-flash`) resting on P-001 Proof B alone, which established only that the model returns schema-valid JSON for one photo of a ceiling AC unit — it establishes nothing about whether the values are correct. The product therefore ships a number (`confidence`) that the model reports about itself and that nothing has checked. Carried forward as the open item it is.
+
+### R-0020 — RULING: zero new dependencies; `node:sqlite` is the database
+- **Claim:** P-003 adds no npm packages. Node 26's built-in `node:sqlite` is the database; there is no framework, and the product is one process started by one command.
+- **Evidence:** Packet P-003, "Supervisor rulings to record before work", item 8. Node version in use: v26.8.2.
+- **Caveat:** `node:sqlite` is a built-in but not a frozen API; code written against it may need revision on a future Node. The zero-dependency rule also means image work stays on macOS `sips` (R-0017's derivation path), so the server as written does not run on Linux without replacing that call.

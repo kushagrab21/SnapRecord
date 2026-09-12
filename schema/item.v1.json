@@ -1,0 +1,113 @@
+{
+  "$comment": "SnapRecord item record, v1. v0 unchanged plus field_confidence and capture.",
+  "type": "object",
+  "required": [
+    "item_name",
+    "category",
+    "label_text",
+    "attributes",
+    "confidence",
+    "field_confidence",
+    "capture"
+  ],
+  "properties": {
+    "item_name": {
+      "type": "string"
+    },
+    "brand": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "category": {
+      "type": "string"
+    },
+    "label_text": {
+      "type": "string",
+      "description": "all legible text on the label, verbatim"
+    },
+    "attributes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "quantity": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "uncertain_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "field_confidence": {
+      "type": "object",
+      "description": "one entry per top-level field the model filled; key is the field name, value is 0..1. Keys are closed to the v1 top-level content fields.",
+      "propertyNames": {
+        "enum": [
+          "item_name",
+          "brand",
+          "category",
+          "label_text",
+          "attributes",
+          "quantity"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "capture": {
+      "type": "object",
+      "required": [
+        "label_legible",
+        "issues"
+      ],
+      "properties": {
+        "label_legible": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "e.g. glare, blur, cropped, distance"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

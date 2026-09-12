@@ -1,0 +1,10 @@
+{
+  "item_name": "Air Conditioner",
+  "brand": "TOSHIBA",
+  "category": "appliance",
+  "label_text": "TOSHIBA",
+  "attributes": [{ "key": "mount", "value": "ceiling cassette", "unit": null }],
+  "quantity": null,
+  "confidence": 0.82,
+  "uncertain_fields": []
+}

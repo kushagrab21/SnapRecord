@@ -1,0 +1,23 @@
+{
+  "item_name": "Rolled Oats",
+  "brand": "Quaker",
+  "category": "food/cereal",
+  "label_text": "QUAKER\nRolled Oats\nEnergy 1590 kJ per 100 g\nIngredients: wholegrain rolled oats",
+  "attributes": [
+    { "key": "energy", "value": "1590", "unit": "kJ" },
+    { "key": "net weight", "value": "500", "unit": "g" },
+    { "key": "ingredients", "value": "wholegrain rolled oats", "unit": null }
+  ],
+  "quantity": 1,
+  "confidence": 0.91,
+  "uncertain_fields": ["quantity"],
+  "field_confidence": {
+    "item_name": 0.97,
+    "brand": 0.95,
+    "category": 0.9,
+    "label_text": 0.88,
+    "attributes": 0.86,
+    "quantity": 0.55
+  },
+  "capture": { "label_legible": true, "issues": ["glare"] }
+}

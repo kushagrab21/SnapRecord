@@ -1,0 +1,330 @@
+// SnapRecord P-003 — the whole product in one process.
+// phone photo -> original stored by sha256 (R-0017) -> derived 1568px -> extraction
+// -> v1 validation -> SQLite row -> server-rendered list.
+// Zero dependencies (R-0020): node:http, node:sqlite, macOS sips.
+//   node server/index.mjs
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
+import { storeCapture, deriveCapture, DERIVED, ROOT } from '../scripts/store.mjs';
+import { validate } from '../scripts/validate.mjs';
+
+const PORT = 8788;
+const MODEL = 'google/gemini-3.8-flash';
+const SCHEMA_VERSION = 'v1';
+const SPEND_CAP_USD = 0.20;                       // P-003 boundary
+const DB_PATH = path.join(ROOT, 'data', 'snaprecord.sqlite');
+const LOG_FILE = path.join(ROOT, 'supervision', 'evidence', 'P-003-server.log');
+
+// --- env (same loader as scripts/extract.mjs) ---
+for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split('\n')) {
+  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+  if (m) process.env[m[1]] ??= m[2];
+}
+const KEY = process.env.OPENROUTER_API_KEY;
+if (!KEY) { console.error('OPENROUTER_API_KEY ABSENT'); process.exit(1); }
+
+function log(line) {
+  const entry = `[${new Date().toISOString()}] ${line}`;
+  console.log(entry);
+  try { fs.appendFileSync(LOG_FILE, entry + '\n'); } catch {}
+}
+
+// --- schema (created on start if absent) ---
+fs.mkdirSync(path.join(ROOT, 'data'), { recursive: true });
+const db = new DatabaseSync(DB_PATH);
+db.exec(`CREATE TABLE IF NOT EXISTS records (
+  id INTEGER PRIMARY KEY,
+  original_sha256 TEXT NOT NULL,
+  derived_sha256  TEXT,
+  received_at     TEXT NOT NULL,
+  model           TEXT,
+  status          TEXT NOT NULL CHECK (status IN ('valid','invalid')),
+  record_json     TEXT,
+  raw_response    TEXT,
+  usage_json      TEXT,
+  cost_usd        REAL,
+  elapsed_ms      INTEGER
+)`);
+
+// --- the P-002 prompt, copied verbatim from scripts/extract.mjs. Not edited. ---
+const schemaText = fs.readFileSync(path.join(ROOT, 'schema', `item.${SCHEMA_VERSION}.json`), 'utf8');
+const PROMPT = `You are extracting a structured record from a photograph of a physical object or its label.
+Return ONLY a single JSON object, no markdown fence, no prose, matching exactly this JSON Schema:
+
+${schemaText}
+
+Rules:
+- label_text must contain ALL legible text on the label, verbatim, preserving line order; use \\n between lines.
+- attributes is an array of {key, value, unit} objects; unit may be null.
+- confidence is your overall confidence 0..1.
+- uncertain_fields lists the names of any fields you were unsure about.
+- field_confidence gives one 0..1 score per top-level content field you filled (item_name, brand, category, label_text, attributes, quantity). Score each field on its own; do not repeat your overall confidence.
+- capture.label_legible is true only if label text is actually readable in the image; capture.issues lists what degrades it, such as glare, blur, cropped, distance. Use an empty array if nothing does.
+- Do not add any property not in the schema.`;
+
+// --- extraction: one call, same shape as scripts/extract.mjs ---
+async function extract(derivedPath) {
+  const b64 = fs.readFileSync(derivedPath).toString('base64');
+  const t0 = Date.now();
+  let body = null, transportError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: MODEL,
+          usage: { include: true },
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: PROMPT },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
+          ]}],
+        }),
+      });
+      body = await res.json();
+      transportError = null;
+      break;
+    } catch (e) {
+      transportError = String(e);
+      if (attempt === 2) break;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  const elapsed_ms = Date.now() - t0;
+  if (!body) return { elapsed_ms, body: { transport_error: transportError }, cost: null };
+
+  const u = body?.usage || {};
+  let cost = u.cost ?? null;
+  if (cost == null && body?.id) {
+    try {
+      await new Promise(r => setTimeout(r, 1500));
+      const g = await (await fetch(`https://openrouter.ai/api/v1/generation?id=${body.id}`,
+        { headers: { Authorization: `Bearer ${KEY}` } })).json();
+      if (g?.data?.total_cost != null) cost = g.data.total_cost;
+    } catch {}
+  }
+  return { elapsed_ms, body, usage: u, cost };
+}
+
+// --- minimal multipart/form-data reader (no dependencies) ---
+function firstFilePart(buf, contentType) {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || '');
+  if (!m) return null;
+  const boundary = Buffer.from('--' + (m[1] || m[2]).trim());
+  let pos = buf.indexOf(boundary);
+  while (pos !== -1) {
+    const start = pos + boundary.length;
+    const next = buf.indexOf(boundary, start);
+    if (next === -1) break;
+    const part = buf.subarray(start, next);
+    const sep = part.indexOf('\r\n\r\n');
+    if (sep !== -1) {
+      const headers = part.subarray(0, sep).toString('utf8');
+      const fn = /filename="([^"]*)"/i.exec(headers);
+      if (fn && fn[1]) {
+        let bodyPart = part.subarray(sep + 4);
+        if (bodyPart.subarray(-2).toString() === '\r\n') bodyPart = bodyPart.subarray(0, -2);
+        const ct = (/content-type:\s*([^\r\n]+)/i.exec(headers) || [])[1] || '';
+        if (bodyPart.length > 0) return { filename: fn[1], contentType: ct.trim(), buf: bodyPart };
+      }
+    }
+    pos = next;
+  }
+  return null;
+}
+
+// --- page ---
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function renderPage(rows) {
+  const items = rows.map(r => {
+    let rec = null;
+    try { rec = r.record_json ? JSON.parse(r.record_json) : null; } catch {}
+    const bad = r.status === 'invalid';
+    const full = rec ?? { raw_response: r.raw_response };
+    return `<article class="card${bad ? ' bad' : ''}">
+  <img src="/derived/${esc(r.original_sha256)}" alt="">
+  <div class="meta">
+    ${bad ? '<p class="flag">INVALID — did not pass the v1 validator</p>' : ''}
+    <h2>${esc(rec?.item_name ?? '(no item_name)')}</h2>
+    <p class="row"><span>category</span> ${esc(rec?.category ?? '—')}</p>
+    <p class="row"><span>confidence</span> ${rec?.confidence ?? '—'}</p>
+    <p class="row"><span>label_legible</span> ${rec?.capture?.label_legible === undefined ? '—' : String(rec.capture.label_legible)}</p>
+    <p class="row dim"><span>sha256</span> ${esc(r.original_sha256.slice(0, 16))}… · ${esc(r.received_at)} · ${r.elapsed_ms}ms · USD ${r.cost_usd ?? '—'}</p>
+    <details><summary>full JSON</summary><pre>${esc(JSON.stringify(full, null, 2))}</pre></details>
+  </div>
+</article>`;
+  }).join('\n');
+
+  return `<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SnapRecord</title>
+<style>
+ :root{color-scheme:dark}
+ body{font:16px -apple-system,system-ui,sans-serif;margin:0;padding:20px;background:#111;color:#eee;max-width:760px}
+ h1{font-size:20px;margin:0 0 4px}
+ .sub{color:#999;font-size:13px;margin:0 0 20px}
+ form{background:#1b1b1b;border:1px solid #333;border-radius:10px;padding:16px}
+ input[type=file]{display:block;width:100%;box-sizing:border-box;padding:14px;background:#222;border:1px solid #444;border-radius:8px;color:#eee}
+ button{margin-top:14px;width:100%;padding:16px;font-size:17px;background:#2d7;color:#062;border:0;border-radius:8px;font-weight:600}
+ .card{display:flex;gap:14px;margin-top:18px;padding:14px;background:#1b1b1b;border:1px solid #333;border-radius:10px}
+ .card.bad{border-color:#a33;background:#221616}
+ .card img{width:110px;height:110px;object-fit:cover;border-radius:8px;background:#000;flex:none}
+ .meta{min-width:0;flex:1}
+ .meta h2{font-size:17px;margin:0 0 8px}
+ .row{margin:3px 0;font-size:14px}
+ .row span{display:inline-block;min-width:110px;color:#888}
+ .dim{color:#777;font-size:12px}
+ .flag{color:#f77;font-weight:600;margin:0 0 6px;font-size:13px}
+ details{margin-top:8px} summary{cursor:pointer;color:#8bd;font-size:13px}
+ pre{white-space:pre-wrap;word-break:break-word;background:#000;padding:10px;border-radius:6px;font-size:12px;overflow-x:auto}
+ @media (max-width:520px){.card{flex-direction:column}.card img{width:100%;height:180px}}
+</style></head><body>
+<h1>SnapRecord</h1>
+<p class="sub">Photograph an object or its label. Extraction accuracy has not been measured.</p>
+<form method="post" action="/upload" enctype="multipart/form-data">
+  <input name="photo" type="file" accept="image/*" capture="environment" required>
+  <button id="go" type="submit">Extract record</button>
+  <p id="working" class="sub" style="margin:10px 0 0" hidden>Uploading and extracting — this takes about 10 seconds. Keep this page open.</p>
+</form>
+<script>
+ var f=document.querySelector('form'),b=document.getElementById('go'),
+     w=document.getElementById('working'),inp=f.querySelector('input[type=file]');
+ f.addEventListener('submit',function(e){
+   var file=inp.files&&inp.files[0];
+   if(!file){ w.hidden=false; w.textContent='Choose a photo first.'; e.preventDefault(); return; }
+   e.preventDefault();
+   b.disabled=true; b.textContent='Working...';
+   w.hidden=false; w.textContent='Uploading '+file.size+' bytes and extracting - about 10 seconds.';
+   fetch('/upload',{method:'POST',
+     headers:{'content-type':file.type||'application/octet-stream','x-filename':file.name||'photo.jpg'},
+     body:file})
+    .then(function(r){return r.text();})
+    .then(function(t){ w.textContent=t+' - reloading'; location.reload(); })
+    .catch(function(err){ w.textContent='Upload failed: '+err; b.disabled=false; b.textContent='Extract record'; });
+ });
+</script>
+${rows.length ? items : '<p class="sub" style="margin-top:20px">No records yet.</p>'}
+</body></html>`;
+}
+
+const allRows = () => db.prepare('SELECT * FROM records ORDER BY id DESC').all();
+const spentSoFar = () => db.prepare('SELECT COALESCE(SUM(cost_usd),0) AS t FROM records').get().t;
+
+// --- routes ---
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://x');
+  log(`REQ ${req.method} ${url.pathname} remote=${req.socket.remoteAddress} ` +
+      `len=${req.headers['content-length'] ?? '-'} ct=${req.headers['content-type'] ?? '-'} ua="${req.headers['user-agent'] || ''}"`);
+
+  if (req.method === 'GET' && url.pathname === '/') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    return res.end(renderPage(allRows()));
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/records') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify(allRows(), null, 2));
+  }
+
+  if (req.method === 'GET' && url.pathname.startsWith('/derived/')) {
+    const sha = url.pathname.slice('/derived/'.length);
+    if (!/^[0-9a-f]{64}$/.test(sha)) { res.writeHead(400); return res.end('bad sha'); }
+    const p = path.join(DERIVED, `${sha}.1568.jpg`);
+    if (!fs.existsSync(p)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000' });
+    return res.end(fs.readFileSync(p));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/upload') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', async () => {
+      try {
+        const raw = Buffer.concat(chunks);
+        const ct = req.headers['content-type'] || '';
+        const part = /multipart\/form-data/i.test(ct)
+          ? firstFilePart(raw, ct)
+          : (raw.length ? { buf: raw, contentType: ct, filename: req.headers['x-filename'] || 'photo.jpg' } : null);
+        if (!part) {
+          log(`UPLOAD REJECTED: no file part. bytes=${raw.length} content-type=${req.headers['content-type']}`);
+          res.writeHead(400, { 'content-type': 'text/plain' });
+          return res.end('no file part in upload');
+        }
+        const received_at = new Date().toISOString();
+
+        // R-0017: original bytes stored by sha256, never rewritten; sidecar alongside.
+        const stored = storeCapture(part.buf, {
+          contentType: part.contentType,
+          originalFilename: part.filename,
+          userAgent: req.headers['user-agent'],
+          receivedAt: received_at,
+          note: 'P-003 product upload',
+        });
+        const derived = deriveCapture(stored.sha256, stored.ext);
+        log(`UPLOAD sha256=${stored.sha256} bytes=${part.buf.length} ${stored.sidecar.width}x${stored.sidecar.height} ` +
+            `content-type=${part.contentType} derived=${derived.sha256.slice(0, 12)} remote=${req.socket.remoteAddress}`);
+
+        const spent = spentSoFar();
+        let status, record_json = null, raw_response, usage_json = null, cost = null, elapsed_ms = 0;
+
+        if (spent >= SPEND_CAP_USD) {
+          status = 'invalid';
+          raw_response = JSON.stringify({ refused: `P-003 spend cap USD ${SPEND_CAP_USD} reached (spent ${spent}); no model call made.` });
+          log(`SPEND CAP REACHED spent=${spent} — refused to call the model`);
+        } else {
+          const r = await extract(derived.path);
+          elapsed_ms = r.elapsed_ms;
+          cost = r.cost ?? null;
+          usage_json = r.usage ? JSON.stringify(r.usage) : null;
+          raw_response = JSON.stringify(r.body);
+          const content = r.body?.choices?.[0]?.message?.content ?? '';
+          const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+          let parsed = null, parseError = null;
+          try { parsed = JSON.parse(cleaned); } catch (e) { parseError = String(e); }
+          const errors = parsed ? validate(parsed, SCHEMA_VERSION) : [`JSON.parse failed: ${parseError}`];
+          status = errors.length === 0 ? 'valid' : 'invalid';
+          if (status === 'valid') record_json = JSON.stringify(parsed);
+          log(`EXTRACT sha256=${stored.sha256.slice(0, 12)} model=${MODEL} status=${status} ` +
+              `elapsed_ms=${elapsed_ms} cost_usd=${cost} tokens=${r.usage?.prompt_tokens}/${r.usage?.completion_tokens}` +
+              (status === 'valid' ? '' : ` errors=${errors.slice(0, 3).join('; ')}`));
+        }
+
+        const info = db.prepare(`INSERT INTO records
+          (original_sha256, derived_sha256, received_at, model, status, record_json, raw_response, usage_json, cost_usd, elapsed_ms)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+            stored.sha256, derived.sha256, received_at, MODEL, status,
+            record_json, raw_response, usage_json, cost, elapsed_ms);
+        log(`ROW id=${info.lastInsertRowid} status=${status} original_sha256=${stored.sha256} cost_usd=${cost}`);
+
+        if (/multipart\/form-data/i.test(req.headers['content-type'] || '')) {
+          res.writeHead(303, { location: '/' });
+          return res.end();
+        }
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.end(`ok id=${info.lastInsertRowid} status=${status}`);
+      } catch (e) {
+        log(`UPLOAD FAILED ${e?.stack || e}`);
+        res.writeHead(500, { 'content-type': 'text/plain' });
+        res.end('upload failed: ' + (e?.message || e));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404).end('not found');
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  log(`SnapRecord listening on 0.0.0.0:${PORT}  db=${path.relative(ROOT, DB_PATH)}  rows=${allRows().length}`);
+  const ips = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces()))
+    for (const a of addrs || []) if (a.family === 'IPv4' && !a.internal) ips.push({ name, address: a.address });
+  for (const ip of ips) log(`OPEN ON PHONE: http://${ip.address}:${PORT}/   (interface ${ip.name})`);
+  if (!ips.length) log('NO LAN IP FOUND');
+});

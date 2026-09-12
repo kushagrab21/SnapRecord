@@ -1,0 +1,27 @@
+=== 2026-09-12T05-05-50-640Z ===
+  pixelWidth: 4032
+  pixelHeight: 3024
+  orientation: <nil>
+  bytes: 2626917
+  --- downscaled ---
+  pixelWidth: 1568
+  pixelHeight: 1176
+  bytes: 500010
+=== 2026-09-12T05-06-23-246Z ===
+  pixelWidth: 4032
+  pixelHeight: 3024
+  orientation: <nil>
+  bytes: 2200952
+  --- downscaled ---
+  pixelWidth: 1568
+  pixelHeight: 1176
+  bytes: 447503
+=== 2026-09-12T05-10-11-799Z ===
+  pixelWidth: 4032
+  pixelHeight: 3024
+  orientation: <nil>
+  bytes: 1338582
+  --- downscaled ---
+  pixelWidth: 1568
+  pixelHeight: 1176
+  bytes: 270934

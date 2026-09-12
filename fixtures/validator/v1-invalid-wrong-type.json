@@ -1,0 +1,9 @@
+{
+  "item_name": "Rolled Oats",
+  "category": "food/cereal",
+  "label_text": "QUAKER\nRolled Oats",
+  "attributes": [],
+  "confidence": 0.9,
+  "field_confidence": { "item_name": "high" },
+  "capture": { "label_legible": "yes", "issues": ["glare"] }
+}
