@@ -59,3 +59,17 @@
 [2026-09-12T05:56:58.428Z] EXTRACT sha256=992e8692a142 model=google/gemini-3.8-flash status=valid elapsed_ms=31618 cost_usd=0.0179655 tokens=2394/4312
 [2026-09-12T05:56:58.432Z] COST transcription=0.00044325 added to row 5
 [2026-09-12T05:56:58.433Z] ROW id=5 status=valid original_sha256=992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270 cost_usd=0.0179655
+[2026-09-12T05:57:47.795Z] REQ GET / remote=192.168.100.104 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:57:47.824Z] REQ GET / remote=192.168.100.104 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:58:25.686Z] REQ GET / remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:58:25.764Z] REQ GET /derived/70480f7e3e4308bd7b9bcbe2b6a047563065930fb9f4baa84e1d51d3e4c99df6 remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:58:47.331Z] REQ POST /upload remote=192.168.100.21 len=2637211 ct=image/jpeg ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:58:47.936Z] UPLOAD sha256=7f0ba2f701713355f136a917d9677aa06048f777c6b454da202e13f6edcfee0e bytes=2637211 4032x3024 content-type=image/jpeg derived=3ce40247e749 remote=192.168.100.21
+[2026-09-12T05:58:47.936Z] NOTE source=dictation chars=37 audio=null text="Could you tell me what this thing is?"
+[2026-09-12T05:59:11.447Z] EXTRACT sha256=7f0ba2f70171 model=google/gemini-3.8-flash status=valid elapsed_ms=23511 cost_usd=0.01296 tokens=2385/2979
+[2026-09-12T05:59:11.453Z] ROW id=6 status=valid original_sha256=7f0ba2f701713355f136a917d9677aa06048f777c6b454da202e13f6edcfee0e cost_usd=0.01296
+[2026-09-12T05:59:11.482Z] REQ GET / remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:59:11.618Z] REQ GET /derived/7f0ba2f701713355f136a917d9677aa06048f777c6b454da202e13f6edcfee0e remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:59:11.622Z] REQ GET /derived/992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270 remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:59:11.771Z] REQ GET /derived/70480f7e3e4308bd7b9bcbe2b6a047563065930fb9f4baa84e1d51d3e4c99df6 remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T05:59:11.805Z] REQ GET /derived/1965ba6c4d52aa88826c1ee16a500837e0904eb7bf610b263c274c662b025d3f remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
