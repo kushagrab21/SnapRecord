@@ -1,0 +1,12 @@
+{
+  "calls": [
+    {
+      "sha": "992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270",
+      "variant": "original",
+      "model": "google/gemini-3.8-flash",
+      "cost_usd": 0.005952,
+      "at": "2026-09-12T05:36:15.434Z"
+    }
+  ],
+  "total_usd": 0.005952
+}

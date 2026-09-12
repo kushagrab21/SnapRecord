@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { storeCapture, deriveCapture, DERIVED, ROOT } from '../scripts/store.mjs';
+import { storeCapture, deriveCapture, dims, sha256File, CAPTURES, DERIVED, MAX_EDGE, ROOT } from '../scripts/store.mjs';
 import { validate } from '../scripts/validate.mjs';
 
 const PORT = 8788;
@@ -135,6 +135,37 @@ function firstFilePart(buf, contentType) {
     pos = next;
   }
   return null;
+}
+
+// --- P-004: locating stored pixels ------------------------------------------
+// The original's extension is whatever it was stored as (R-0017), so it is
+// discovered on disk rather than assumed; the sidecar carries mime and dims.
+const MIME_BY_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.heic': 'image/heic', '.webp': 'image/webp' };
+
+export function resolveOriginal(sha) {
+  if (!/^[0-9a-f]{64}$/.test(sha)) return null;
+  let sidecar = null;
+  const sidecarPath = path.join(CAPTURES, `${sha}.json`);
+  if (fs.existsSync(sidecarPath)) { try { sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8')); } catch {} }
+  const file = fs.readdirSync(CAPTURES).find(f => f.startsWith(sha) && !f.endsWith('.json'));
+  if (!file) return null;
+  const p = path.join(CAPTURES, file);
+  const ext = path.extname(file).toLowerCase();
+  const stat = fs.statSync(p);
+  return {
+    path: p, ext, sha256: sha, sidecar,
+    mime: sidecar?.content_type || MIME_BY_EXT[ext] || 'application/octet-stream',
+    width: sidecar?.width ?? null,
+    height: sidecar?.height ?? null,
+    bytes: stat.size,
+  };
+}
+
+export function derivedInfo(originalSha) {
+  const p = path.join(DERIVED, `${originalSha}.${MAX_EDGE}.jpg`);
+  if (!fs.existsSync(p)) return null;
+  const d = dims(p);
+  return { path: p, mime: 'image/jpeg', sha256: sha256File(p), width: d.width, height: d.height, bytes: fs.statSync(p).size };
 }
 
 // --- page ---
@@ -315,6 +346,74 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  // --- P-004: pixels over HTTP ---------------------------------------------
+  // Ruling 9 (R-0022): the stored original is canonical. /original/:sha serves
+  // the exact bytes on disk; the derived copy is only ever an explicit opt-in.
+
+  if (req.method === 'GET' && url.pathname.startsWith('/original/')) {
+    const sha = url.pathname.slice('/original/'.length);
+    if (!/^[0-9a-f]{64}$/.test(sha)) { res.writeHead(400); return res.end('bad sha'); }
+    const cap = resolveOriginal(sha);
+    if (!cap) { res.writeHead(404); return res.end('not found'); }
+    const buf = fs.readFileSync(cap.path);
+    res.writeHead(200, {
+      'content-type': cap.mime,
+      'content-length': String(buf.length),
+      'etag': `"${sha}"`,
+      'cache-control': 'public, max-age=31536000, immutable',
+    });
+    return res.end(buf);
+  }
+
+  const recMatch = /^\/api\/records\/(\d+)(\/image)?$/.exec(url.pathname);
+  if (req.method === 'GET' && recMatch) {
+    const row = db.prepare('SELECT * FROM records WHERE id = ?').get(Number(recMatch[1]));
+    if (!row) { res.writeHead(404, { 'content-type': 'application/json' }); return res.end('{"error":"no such record"}'); }
+    const orig = resolveOriginal(row.original_sha256);
+
+    if (!recMatch[2]) {
+      const der = derivedInfo(row.original_sha256);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({
+        ...row,
+        original_url: `/original/${row.original_sha256}`,
+        derived_url: `/derived/${row.original_sha256}`,
+        original_sha256: row.original_sha256,
+        derived_sha256: row.derived_sha256,
+        width: orig?.width ?? null,
+        height: orig?.height ?? null,
+        bytes: orig?.bytes ?? null,
+        original: orig ? { sha256: row.original_sha256, path: path.relative(ROOT, orig.path), mime: orig.mime, width: orig.width, height: orig.height, bytes: orig.bytes } : null,
+        derived: der ? { sha256: row.derived_sha256, path: path.relative(ROOT, der.path), mime: der.mime, width: der.width, height: der.height, bytes: der.bytes } : null,
+      }, null, 2));
+    }
+
+    // /api/records/:id/image?variant=original|derived&as=base64   (variant defaults to original)
+    const variant = url.searchParams.get('variant') || 'original';
+    if (variant !== 'original' && variant !== 'derived') {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      return res.end('{"error":"variant must be original or derived"}');
+    }
+    const info = variant === 'original' ? orig : derivedInfo(row.original_sha256);
+    if (!info) { res.writeHead(404, { 'content-type': 'application/json' }); return res.end('{"error":"image file missing"}'); }
+    const buf = fs.readFileSync(info.path);
+
+    if ((url.searchParams.get('as') || 'base64') !== 'base64') {
+      res.writeHead(200, { 'content-type': info.mime, 'content-length': String(buf.length), 'etag': `"${info.sha256}"` });
+      return res.end(buf);
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({
+      variant,
+      sha256: info.sha256,
+      mime: info.mime,
+      width: info.width,
+      height: info.height,
+      bytes: info.bytes,
+      data_url: `data:${info.mime};base64,${buf.toString('base64')}`,
+    }));
   }
 
   res.writeHead(404).end('not found');
