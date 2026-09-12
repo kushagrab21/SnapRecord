@@ -1,0 +1,5 @@
+/Users/kushagra/Desktop/SnapRecord/supervision/evidence/captures/2026-09-12T04-48-56-748Z.jpg
+  pixelWidth: 4032
+  pixelHeight: 3024
+  orientation: <nil>
+  format: jpeg

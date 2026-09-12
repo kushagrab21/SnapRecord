@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "required": ["item_name", "category", "label_text", "attributes", "confidence"],
+  "properties": {
+    "item_name":  { "type": "string" },
+    "brand":      { "type": ["string", "null"] },
+    "category":   { "type": "string" },
+    "label_text": { "type": "string", "description": "all legible text on the label, verbatim" },
+    "attributes": { "type": "array", "items": { "type": "object", "required": ["key", "value"], "properties": { "key": {"type":"string"}, "value": {"type":"string"}, "unit": {"type":["string","null"]} } } },
+    "quantity":   { "type": ["number", "null"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "uncertain_fields": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

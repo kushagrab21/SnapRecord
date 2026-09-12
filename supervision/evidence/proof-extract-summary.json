@@ -1,0 +1,47 @@
+{
+  "model": "google/gemini-3.8-flash",
+  "image": "2026-09-12T04-48-56-748Z.jpg",
+  "before": {
+    "w": 4032,
+    "h": 3024,
+    "bytes": 2767840
+  },
+  "after": {
+    "w": 1568,
+    "h": 1176,
+    "bytes": 472506
+  },
+  "runs": [
+    {
+      "run": 1,
+      "pass": true,
+      "prompt_tokens": 1450,
+      "completion_tokens": 563,
+      "elapsed_ms": 7111,
+      "cost_usd": 0.00319875,
+      "cost_source": "OpenRouter usage.cost (response body)",
+      "errors": []
+    },
+    {
+      "run": 2,
+      "pass": true,
+      "prompt_tokens": 1451,
+      "completion_tokens": 616,
+      "elapsed_ms": 14910,
+      "cost_usd": 0.00339825,
+      "cost_source": "OpenRouter usage.cost (response body)",
+      "errors": []
+    },
+    {
+      "run": 3,
+      "pass": true,
+      "prompt_tokens": 1450,
+      "completion_tokens": 705,
+      "elapsed_ms": 6827,
+      "cost_usd": 0.00373125,
+      "cost_source": "OpenRouter usage.cost (response body)",
+      "errors": []
+    }
+  ],
+  "total_cost_usd": 0.01032825
+}

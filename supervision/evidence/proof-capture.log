@@ -1,0 +1,5 @@
+[2026-09-12T04:44:42.508Z] server listening on 0.0.0.0:8787
+[2026-09-12T04:44:42.510Z] OPEN ON PHONE: http://192.168.100.104:8787/   (interface en0)
+[2026-09-12T04:44:49.252Z] GET / from 192.168.100.104 ua="curl/8.7.1"
+[2026-09-12T04:48:36.336Z] GET / from 192.168.100.21 ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
+[2026-09-12T04:48:56.753Z] UPLOAD ok file=2026-09-12T04-48-56-748Z.jpg bytes=2767840 content-type=image/jpeg remote=192.168.100.21 user-agent="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"

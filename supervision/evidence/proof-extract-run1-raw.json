@@ -1,0 +1,54 @@
+{
+  "id": "gen-1789188549-DPm7MoWueg8Lx7SjdUn3",
+  "object": "chat.completion",
+  "created": 1789188549,
+  "model": "google/gemini-3.8-flash",
+  "provider": "Google",
+  "system_fingerprint": null,
+  "service_tier": "default",
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "message": {
+        "role": "assistant",
+        "content": "{\"item_name\": \"Ceiling Cassette Air Conditioner\", \"brand\": \"Toshiba\", \"category\": \"HVAC Equipment\", \"label_text\": \"TOSHIBA\", \"attributes\": [{\"key\": \"type\", \"value\": \"4-way cassette indoor unit\", \"unit\": null}, {\"key\": \"mounting\", \"value\": \"ceiling-suspended\", \"unit\": null}, {\"key\": \"color\", \"value\": \"white\", \"unit\": null}], \"quantity\": 1, \"confidence\": 0.8, \"uncertain_fields\": []}",
+        "refusal": null,
+        "reasoning": "**Analyzing Current Findings**\n\nI'm currently focused on extracting structured data from the provided image, specifically for a ceiling cassette air conditioner, and mapping it to the given JSON schema. My analysis has begun with a detailed examination of the image's contents.\n\n**Identifying Key Attributes**\n\nMy focus has shifted to pinpointing specific attributes from the visual data. I've confirmed the brand as \"TOSHIBA\" based on markings on the cassette faceplate, and I'm cataloging the unit as a \"Ceiling Cassette Air Conditioner.\"\n\n",
+        "reasoning_details": [
+          {
+            "type": "reasoning.text",
+            "text": "**Analyzing Current Findings**\n\nI'm currently focused on extracting structured data from the provided image, specifically for a ceiling cassette air conditioner, and mapping it to the given JSON schema. My analysis has begun with a detailed examination of the image's contents.\n\n**Identifying Key Attributes**\n\nMy focus has shifted to pinpointing specific attributes from the visual data. I've confirmed the brand as \"TOSHIBA\" based on markings on the cassette faceplate, and I'm cataloging the unit as a \"Ceiling Cassette Air Conditioner.\"\n\n",
+            "format": "google-gemini-v1",
+            "index": 0
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1450,
+    "completion_tokens": 563,
+    "total_tokens": 2013,
+    "cost": 0.00319875,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00319875,
+      "upstream_inference_prompt_cost": 0.0010875,
+      "upstream_inference_completions_cost": 0.00211125
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 442,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

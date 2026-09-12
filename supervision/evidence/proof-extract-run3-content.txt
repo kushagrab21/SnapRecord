@@ -1,0 +1,1 @@
+{"item_name":"Ceiling Cassette Air Conditioner Indoor Unit","brand":"Toshiba","category":"HVAC & Climate Control","label_text":"TOSHIBA","attributes":[{"key":"type","value":"4-way ceiling cassette","unit":null},{"key":"mounting","value":"Ceiling-suspended","unit":null},{"key":"color","value":"White","unit":null}],"quantity":1,"confidence":0.85,"uncertain_fields":[]}

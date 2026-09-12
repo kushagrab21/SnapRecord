@@ -1,0 +1,8 @@
+.env*
+!.env.example
+node_modules/
+data/
+*.sqlite*
+supervision/evidence/captures/
+.DS_Store
+supervision/evidence/proof-extract-input.jpg
