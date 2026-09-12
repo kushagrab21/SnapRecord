@@ -18,3 +18,7 @@
 [2026-09-12T05:30:09.420Z] REQ GET /derived/1965ba6c4d52aa88826c1ee16a500837e0904eb7bf610b263c274c662b025d3f remote=192.168.100.21 len=- ct=- ua="Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/437.4.973319807 Mobile/15E148 Safari/604.1"
 [2026-09-12T05:30:21.545Z] SnapRecord listening on 0.0.0.0:8788  db=data/snaprecord.sqlite  rows=2
 [2026-09-12T05:30:21.546Z] OPEN ON PHONE: http://192.168.100.104:8788/   (interface en0)
+[2026-09-12T05:30:53.648Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+[2026-09-12T05:30:53.699Z] REQ GET /derived/992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270 remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+[2026-09-12T05:30:53.700Z] REQ GET /derived/1965ba6c4d52aa88826c1ee16a500837e0904eb7bf610b263c274c662b025d3f remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+[2026-09-12T05:30:53.738Z] REQ GET /favicon.ico remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
