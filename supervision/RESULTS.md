@@ -121,3 +121,18 @@ Append-only. Never edit or delete an existing entry; supersede it with a new one
 - **Claim:** Verification for P-004 is a single script call that sends a stored original to the model and returns an answer. Nothing else in the packet is checked.
 - **Evidence:** Packet P-004, "Supervisor rulings to record before work", item 10.
 - **Caveat:** The three new HTTP endpoints, the README's curl and Node examples, and the `--variant derived` path therefore ship UNVERIFIED. They are written, not exercised; anything asserted about them here is a claim about the code, not a measurement.
+
+### R-0024 — RULING: the spoken note is evidence, stored verbatim
+- **Claim:** Whatever the user said — as dictated text or as transcribed audio — is stored exactly as received in `user_note.text` and is never altered by the extraction model. The model may USE it; the record must show what it was given.
+- **Evidence:** Packet P-005, "Supervisor rulings to record before work", item 11.
+- **Caveat:** "Verbatim" bounds what the *server* and the *model* do, not what the input device does. iOS keyboard dictation already interprets speech into text before the page sees a character, so `user_note.text` is verbatim with respect to the textarea's contents, not with respect to the sound the user made; dictation mishears are recorded as if the user had typed them and are indistinguishable from typing in the stored row. The same holds one level further out for `source: 'transcription'`, where the transcript is a model's reading of the audio and only the audio bytes are primary.
+
+### R-0025 — RULING: audio bytes follow ruling 5 (R-0017)
+- **Claim:** Any recorded audio is stored untouched at `data/audio/<sha256>.<ext>` with a sidecar, hash-linked from the record. The transcript is a derivative.
+- **Evidence:** Packet P-005, "Supervisor rulings to record before work", item 12.
+- **Caveat:** Inherits R-0017's caveat: content addressing collapses byte-identical re-uploads onto one file, and immutability is convention plus a `wx` open, not a filesystem guarantee. New here is that the container the browser hands over is not chosen by this product — `MediaRecorder` emits whatever mime it likes (`audio/mp4` on iOS, `audio/webm` elsewhere) — so the stored extension varies by device and nothing normalises it.
+
+### R-0026 — RULING: Tier 2 is proven or reported failed, never assumed
+- **Claim:** A record whose `user_note.source` is `transcription` must carry an `audio_sha256` whose file exists. Tier 2 (recorded audio over HTTPS) is either demonstrated end-to-end or marked FAILED with the symptom recorded; it is never described as working on the strength of the code having been written.
+- **Evidence:** Packet P-005, "Supervisor rulings to record before work", item 13.
+- **Caveat:** This is the general form of R-0023's restriction and it cuts both ways: code that ships unexercised under this ruling must be *called* unexercised in the report, including the `MediaRecorder` path, the HTTPS listener and the transcription call if the packet's one verification does not touch them.

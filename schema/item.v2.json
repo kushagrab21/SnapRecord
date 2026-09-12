@@ -1,0 +1,152 @@
+{
+  "$comment": "SnapRecord item record, v2. v1 unchanged plus required user_note (P-005). The note is stored verbatim (R-0024); audio bytes are content-addressed (R-0025).",
+  "type": "object",
+  "required": [
+    "item_name",
+    "category",
+    "label_text",
+    "attributes",
+    "confidence",
+    "field_confidence",
+    "capture",
+    "user_note"
+  ],
+  "properties": {
+    "item_name": {
+      "type": "string"
+    },
+    "brand": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "category": {
+      "type": "string"
+    },
+    "label_text": {
+      "type": "string",
+      "description": "all legible text on the label, verbatim"
+    },
+    "attributes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "quantity": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "uncertain_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "field_confidence": {
+      "type": "object",
+      "description": "one entry per top-level field the model filled; key is the field name, value is 0..1. Keys are closed to the v1 top-level content fields.",
+      "propertyNames": {
+        "enum": [
+          "item_name",
+          "brand",
+          "category",
+          "label_text",
+          "attributes",
+          "quantity"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "capture": {
+      "type": "object",
+      "required": [
+        "label_legible",
+        "issues"
+      ],
+      "properties": {
+        "label_legible": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "e.g. glare, blur, cropped, distance"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "user_note": {
+      "type": "object",
+      "description": "what the user said about this object, stored exactly as received and never altered by the model (R-0024)",
+      "required": [
+        "text",
+        "source",
+        "audio_sha256",
+        "transcript_model"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "verbatim; may be empty"
+        },
+        "source": {
+          "enum": [
+            "none",
+            "dictation",
+            "transcription"
+          ]
+        },
+        "audio_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "sha256 of the stored original audio at data/audio/<sha256>.<ext> (R-0025); null when no audio was recorded"
+        },
+        "transcript_model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "model that produced text when source is transcription; null otherwise"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -22,7 +22,7 @@ function expectInvalid(name, obj, version, wanted) {
     `errors: ${JSON.stringify(errs)}${missing.length ? `\n        MISSING expected: ${JSON.stringify(missing)}` : ''}`);
 }
 
-console.log('validator tests — schema v1 (and v0 regression)\n');
+console.log('validator tests — schema v2 (and v1/v0 regression)\n');
 
 // 1. valid v1
 {
@@ -61,5 +61,35 @@ expectInvalid('field_confidence rejects a value outside 0..1',
 // 9. non-object root
 expectInvalid('a JSON array is not a valid record', [1, 2, 3], 'v1', ['root: not an object']);
 
-console.log(`\n${failures === 0 ? 'ALL TESTS PASSED' : failures + ' TEST(S) FAILED'} (9 tests)`);
+// --- v2: user_note (P-005) ---
+// 10. valid v2
+{
+  const errs = validate(load('v2-valid.json'), 'v2');
+  check('v2 valid fixture reports zero errors', errs.length === 0, errs.length ? `errors: ${JSON.stringify(errs)}` : '');
+}
+// 11. v1 shape must FAIL v2 (user_note now required)
+expectInvalid('v1 shape fails under v2 (user_note now required)', load('v1-valid.json'), 'v2',
+  ['required: missing "user_note"']);
+// 12. v2 shape must FAIL v1 (v1 is closed and does not know user_note)
+expectInvalid('v2 shape fails under v1 (v1 unchanged and closed)', load('v2-valid.json'), 'v1',
+  ['additionalProperties: unexpected key "user_note"']);
+// 13. user_note is closed
+expectInvalid('user_note rejects an unexpected key',
+  { ...load('v2-valid.json'), user_note: { text: '', source: 'none', audio_sha256: null, transcript_model: null, language: 'en' } }, 'v2',
+  ['user_note: additionalProperties: unexpected key "language"']);
+// 14. source enum
+expectInvalid('user_note.source rejects a value outside the enum',
+  { ...load('v2-valid.json'), user_note: { text: 'x', source: 'typed', audio_sha256: null, transcript_model: null } }, 'v2',
+  ['user_note.source: not one of none|dictation|transcription']);
+// 15. R-0026: transcription must name its audio
+expectInvalid('user_note.source "transcription" without audio_sha256 is rejected (R-0026)',
+  { ...load('v2-valid.json'), user_note: { text: 'x', source: 'transcription', audio_sha256: null, transcript_model: 'some/model' } }, 'v2',
+  ['requires an audio_sha256']);
+// 16. an empty note is legal
+{
+  const errs = validate({ ...load('v2-valid.json'), user_note: { text: '', source: 'none', audio_sha256: null, transcript_model: null } }, 'v2');
+  check('an empty note with source "none" is valid', errs.length === 0, errs.length ? `errors: ${JSON.stringify(errs)}` : '');
+}
+
+console.log(`\n${failures === 0 ? 'ALL TESTS PASSED' : failures + ' TEST(S) FAILED'} (16 tests)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -22,3 +22,25 @@
 [2026-09-12T05:30:53.699Z] REQ GET /derived/992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270 remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
 [2026-09-12T05:30:53.700Z] REQ GET /derived/1965ba6c4d52aa88826c1ee16a500837e0904eb7bf610b263c274c662b025d3f remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
 [2026-09-12T05:30:53.738Z] REQ GET /favicon.ico remote=127.0.0.1 len=- ct=- ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+[2026-09-12T05:51:41.177Z] SnapRecord listening on 0.0.0.0:8788  db=data/snaprecord.sqlite  rows=2
+[2026-09-12T05:51:41.178Z] OPEN ON PHONE: http://192.168.100.104:8788/   (interface en0)
+[2026-09-12T05:51:41.180Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:51:41.189Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:51:41.201Z] REQ POST /upload remote=127.0.0.1 len=1338582 ct=image/jpeg ua="curl/8.7.1"
+[2026-09-12T05:51:41.224Z] UPLOAD sha256=1965ba6c4d52aa88826c1ee16a500837e0904eb7bf610b263c274c662b025d3f bytes=1338582 4032x3024 content-type=image/jpeg derived=9ce87a6faf35 remote=127.0.0.1
+[2026-09-12T05:51:41.224Z] NOTE source=dictation chars=62 text="this is the ceiling air conditioner in the back room, unit two"
+[2026-09-12T05:52:06.752Z] EXTRACT sha256=1965ba6c4d52 model=google/gemini-3.8-flash status=valid elapsed_ms=25528 cost_usd=0.01307175 tokens=2389/3008
+[2026-09-12T05:52:06.754Z] ROW id=3 status=valid original_sha256=1965ba6c4d52aa88826c1ee16a500837e0904eb7bf610b263c274c662b025d3f cost_usd=0.01307175
+[2026-09-12T05:52:48.870Z] SnapRecord listening on 0.0.0.0:8788  db=data/snaprecord.sqlite  rows=3
+[2026-09-12T05:52:48.872Z] OPEN ON PHONE: http://192.168.100.104:8788/   (interface en0)
+[2026-09-12T05:52:50.817Z] REQ POST /upload remote=127.0.0.1 len=2201347 ct=multipart/form-data; boundary=------------------------03XPhzpYLCdLNq9XBYCnOK ua="curl/8.7.1"
+[2026-09-12T05:52:50.852Z] UPLOAD sha256=70480f7e3e4308bd7b9bcbe2b6a047563065930fb9f4baa84e1d51d3e4c99df6 bytes=2200952 4032x3024 content-type=image/jpeg derived=6a47b0bd530c remote=127.0.0.1
+[2026-09-12T05:52:50.852Z] NOTE source=dictation chars=37 text="multipart path check, the wall poster"
+[2026-09-12T05:53:00.968Z] SnapRecord listening on 0.0.0.0:8788  db=data/snaprecord.sqlite  rows=3
+[2026-09-12T05:53:00.969Z] OPEN ON PHONE: http://192.168.100.104:8788/   (interface en0)
+[2026-09-12T05:53:02.939Z] REQ POST /upload remote=127.0.0.1 len=2201347 ct=multipart/form-data; boundary=------------------------TkjXUoxRyksc94LErkNoxC ua="curl/8.7.1"
+[2026-09-12T05:53:02.978Z] UPLOAD sha256=70480f7e3e4308bd7b9bcbe2b6a047563065930fb9f4baa84e1d51d3e4c99df6 bytes=2200952 4032x3024 content-type=image/jpeg derived=6a47b0bd530c remote=127.0.0.1
+[2026-09-12T05:53:02.978Z] NOTE source=dictation chars=37 text="multipart path check, the wall poster"
+[2026-09-12T05:53:25.097Z] EXTRACT sha256=70480f7e3e43 model=google/gemini-3.8-flash status=valid elapsed_ms=22117 cost_usd=0.012411 tokens=2383/2833
+[2026-09-12T05:53:25.102Z] ROW id=4 status=valid original_sha256=70480f7e3e4308bd7b9bcbe2b6a047563065930fb9f4baa84e1d51d3e4c99df6 cost_usd=0.012411
+[2026-09-12T05:53:25.122Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="curl/8.7.1"

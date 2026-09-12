@@ -11,11 +11,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { storeCapture, deriveCapture, dims, sha256File, CAPTURES, DERIVED, MAX_EDGE, ROOT } from '../scripts/store.mjs';
 import { validate } from '../scripts/validate.mjs';
+import { promptFor } from '../scripts/prompt.mjs';
 
 const PORT = 8788;
 const MODEL = 'google/gemini-3.8-flash';
-const SCHEMA_VERSION = 'v1';
-const SPEND_CAP_USD = 0.20;                       // P-003 boundary
+const SCHEMA_VERSION = 'v2';               // schema/item.v2.json, see scripts/prompt.mjs
+const SPEND_CAP_USD = 0.20;                       // P-003/P-005 boundary
 const DB_PATH = path.join(ROOT, 'data', 'snaprecord.sqlite');
 const LOG_FILE = path.join(ROOT, 'supervision', 'evidence', 'P-003-server.log');
 
@@ -49,26 +50,15 @@ db.exec(`CREATE TABLE IF NOT EXISTS records (
   cost_usd        REAL,
   elapsed_ms      INTEGER
 )`);
-
-// --- the P-002 prompt, copied verbatim from scripts/extract.mjs. Not edited. ---
-const schemaText = fs.readFileSync(path.join(ROOT, 'schema', `item.${SCHEMA_VERSION}.json`), 'utf8');
-const PROMPT = `You are extracting a structured record from a photograph of a physical object or its label.
-Return ONLY a single JSON object, no markdown fence, no prose, matching exactly this JSON Schema:
-
-${schemaText}
-
-Rules:
-- label_text must contain ALL legible text on the label, verbatim, preserving line order; use \\n between lines.
-- attributes is an array of {key, value, unit} objects; unit may be null.
-- confidence is your overall confidence 0..1.
-- uncertain_fields lists the names of any fields you were unsure about.
-- field_confidence gives one 0..1 score per top-level content field you filled (item_name, brand, category, label_text, attributes, quantity). Score each field on its own; do not repeat your overall confidence.
-- capture.label_legible is true only if label text is actually readable in the image; capture.issues lists what degrades it, such as glare, blur, cropped, distance. Use an empty array if nothing does.
-- Do not add any property not in the schema.`;
+// P-005: the note is evidence and must survive even on rows the model failed (R-0024),
+// so it lives in its own columns as well as inside record_json.
+for (const col of ['user_note_text TEXT', 'user_note_source TEXT', 'audio_sha256 TEXT', 'transcript_model TEXT'])
+  try { db.exec(`ALTER TABLE records ADD COLUMN ${col}`); } catch {}   // throws once the column exists
 
 // --- extraction: one call, same shape as scripts/extract.mjs ---
-async function extract(derivedPath) {
+async function extract(derivedPath, noteText = '') {
   const b64 = fs.readFileSync(derivedPath).toString('base64');
+  const prompt = promptFor(noteText);
   const t0 = Date.now();
   let body = null, transportError = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -80,7 +70,7 @@ async function extract(derivedPath) {
           model: MODEL,
           usage: { include: true },
           messages: [{ role: 'user', content: [
-            { type: 'text', text: PROMPT },
+            { type: 'text', text: prompt },
             { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
           ]}],
         }),
@@ -107,7 +97,7 @@ async function extract(derivedPath) {
       if (g?.data?.total_cost != null) cost = g.data.total_cost;
     } catch {}
   }
-  return { elapsed_ms, body, usage: u, cost };
+  return { elapsed_ms, body, usage: u, cost, prompt };
 }
 
 // --- minimal multipart/form-data reader (no dependencies) ---
@@ -135,6 +125,33 @@ function firstFilePart(buf, contentType) {
     pos = next;
   }
   return null;
+}
+
+// P-005: the same walk, returning the non-file fields (we want `note`).
+function formFields(buf, contentType) {
+  const out = {};
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || '');
+  if (!m) return out;
+  const boundary = Buffer.from('--' + (m[1] || m[2]).trim());
+  let pos = buf.indexOf(boundary);
+  while (pos !== -1) {
+    const start = pos + boundary.length;
+    const next = buf.indexOf(boundary, start);
+    if (next === -1) break;
+    const part = buf.subarray(start, next);
+    const sep = part.indexOf('\r\n\r\n');
+    if (sep !== -1) {
+      const headers = part.subarray(0, sep).toString('utf8');
+      const nm = /name="([^"]*)"/i.exec(headers);
+      if (nm && !/filename="/i.test(headers)) {
+        let v = part.subarray(sep + 4);
+        if (v.subarray(-2).toString() === '\r\n') v = v.subarray(0, -2);
+        out[nm[1]] = v.toString('utf8');
+      }
+    }
+    pos = next;
+  }
+  return out;
 }
 
 // --- P-004: locating stored pixels ------------------------------------------
@@ -177,6 +194,12 @@ function renderPage(rows) {
     try { rec = r.record_json ? JSON.parse(r.record_json) : null; } catch {}
     const bad = r.status === 'invalid';
     const full = rec ?? { raw_response: r.raw_response };
+    // P-005: the note is shown from its own column so it appears on invalid rows too.
+    const noteText = r.user_note_text ?? rec?.user_note?.text ?? '';
+    const noteSrc = r.user_note_source ?? rec?.user_note?.source ?? 'none';
+    const noteBlock = noteText
+      ? `<p class="note">\u201c${esc(noteText)}\u201d <span class="dim">\u2014 ${esc(noteSrc)}${r.audio_sha256 ? ' \u00b7 audio ' + esc(String(r.audio_sha256).slice(0, 12)) + '\u2026' : ''}</span></p>`
+      : '<p class="note dim">(no note)</p>';
     return `<article class="card${bad ? ' bad' : ''}">
   <img src="/derived/${esc(r.original_sha256)}" alt="">
   <div class="meta">
@@ -185,6 +208,7 @@ function renderPage(rows) {
     <p class="row"><span>category</span> ${esc(rec?.category ?? '—')}</p>
     <p class="row"><span>confidence</span> ${rec?.confidence ?? '—'}</p>
     <p class="row"><span>label_legible</span> ${rec?.capture?.label_legible === undefined ? '—' : String(rec.capture.label_legible)}</p>
+    ${noteBlock}
     <p class="row dim"><span>sha256</span> ${esc(r.original_sha256.slice(0, 16))}… · ${esc(r.received_at)} · ${r.elapsed_ms}ms · USD ${r.cost_usd ?? '—'}</p>
     <details><summary>full JSON</summary><pre>${esc(JSON.stringify(full, null, 2))}</pre></details>
   </div>
@@ -212,6 +236,12 @@ function renderPage(rows) {
  .row span{display:inline-block;min-width:110px;color:#888}
  .dim{color:#777;font-size:12px}
  .flag{color:#f77;font-weight:600;margin:0 0 6px;font-size:13px}
+ .note{margin:8px 0 0;font-size:14px;color:#dda;border-left:2px solid #554;padding-left:8px}
+ .note.dim{color:#666;border-color:#333}
+ textarea{display:block;width:100%;box-sizing:border-box;margin-top:12px;padding:14px;min-height:74px;
+   background:#222;border:1px solid #444;border-radius:8px;color:#eee;font:16px -apple-system,system-ui,sans-serif;resize:vertical}
+ #rec{margin-top:12px;width:100%;padding:14px;font-size:16px;background:#333;color:#eee;border:1px solid #555;border-radius:8px}
+ #rec.on{background:#a33;color:#fff}
  details{margin-top:8px} summary{cursor:pointer;color:#8bd;font-size:13px}
  pre{white-space:pre-wrap;word-break:break-word;background:#000;padding:10px;border-radius:6px;font-size:12px;overflow-x:auto}
  @media (max-width:520px){.card{flex-direction:column}.card img{width:100%;height:180px}}
@@ -220,6 +250,8 @@ function renderPage(rows) {
 <p class="sub">Photograph an object or its label. Extraction accuracy has not been measured.</p>
 <form method="post" action="/upload" enctype="multipart/form-data">
   <input name="photo" type="file" accept="image/*" capture="environment" required>
+  <textarea name="note" id="note" placeholder="Say or type what this is"></textarea>
+  <p class="sub" style="margin:6px 0 0">Tap the microphone on your keyboard to dictate. Stored word for word.</p>
   <button id="go" type="submit">Extract record</button>
   <p id="working" class="sub" style="margin:10px 0 0" hidden>Uploading and extracting — this takes about 10 seconds. Keep this page open.</p>
 </form>
@@ -232,9 +264,11 @@ function renderPage(rows) {
    e.preventDefault();
    b.disabled=true; b.textContent='Working...';
    w.hidden=false; w.textContent='Uploading '+file.size+' bytes and extracting - about 10 seconds.';
-   fetch('/upload',{method:'POST',
-     headers:{'content-type':file.type||'application/octet-stream','x-filename':file.name||'photo.jpg'},
-     body:file})
+   var note=document.getElementById('note').value||'';
+   // Headers are latin-1 on the wire; base64 carries UTF-8 dictation through intact.
+   var h={'content-type':file.type||'application/octet-stream','x-filename':file.name||'photo.jpg'};
+   if(note) h['x-user-note']=btoa(String.fromCharCode.apply(null,new TextEncoder().encode(note)));
+   fetch('/upload',{method:'POST',headers:h,body:file})
     .then(function(r){return r.text();})
     .then(function(t){ w.textContent=t+' - reloading'; location.reload(); })
     .catch(function(err){ w.textContent='Upload failed: '+err; b.disabled=false; b.textContent='Extract record'; });
@@ -279,7 +313,20 @@ const server = http.createServer(async (req, res) => {
       try {
         const raw = Buffer.concat(chunks);
         const ct = req.headers['content-type'] || '';
-        const part = /multipart\/form-data/i.test(ct)
+        const isMultipart = /multipart\/form-data/i.test(ct);
+
+        // P-005 Tier 1: the note arrives as a multipart field on the form path and as a
+        // base64 X-User-Note header on the raw-fetch path (headers are latin-1 on the wire,
+        // so base64 is how UTF-8 dictation survives it). Stored exactly as received (R-0024).
+        let noteText = '';
+        if (isMultipart) {
+          noteText = formFields(raw, ct).note ?? '';
+        } else if (req.headers['x-user-note']) {
+          try { noteText = Buffer.from(String(req.headers['x-user-note']), 'base64').toString('utf8'); }
+          catch (e) { log(`NOTE DECODE FAILED ${e}`); }
+        }
+
+        const part = isMultipart
           ? firstFilePart(raw, ct)
           : (raw.length ? { buf: raw, contentType: ct, filename: req.headers['x-filename'] || 'photo.jpg' } : null);
         if (!part) {
@@ -301,6 +348,15 @@ const server = http.createServer(async (req, res) => {
         log(`UPLOAD sha256=${stored.sha256} bytes=${part.buf.length} ${stored.sidecar.width}x${stored.sidecar.height} ` +
             `content-type=${part.contentType} derived=${derived.sha256.slice(0, 12)} remote=${req.socket.remoteAddress}`);
 
+        // The note object as it will be stored. Never rewritten after this point.
+        const user_note = {
+          text: noteText,
+          source: noteText.length ? 'dictation' : 'none',
+          audio_sha256: null,
+          transcript_model: null,
+        };
+        log(`NOTE source=${user_note.source} chars=${noteText.length} text=${JSON.stringify(noteText)}`);
+
         const spent = spentSoFar();
         let status, record_json = null, raw_response, usage_json = null, cost = null, elapsed_ms = 0;
 
@@ -309,7 +365,7 @@ const server = http.createServer(async (req, res) => {
           raw_response = JSON.stringify({ refused: `P-003 spend cap USD ${SPEND_CAP_USD} reached (spent ${spent}); no model call made.` });
           log(`SPEND CAP REACHED spent=${spent} — refused to call the model`);
         } else {
-          const r = await extract(derived.path);
+          const r = await extract(derived.path, user_note.text);
           elapsed_ms = r.elapsed_ms;
           cost = r.cost ?? null;
           usage_json = r.usage ? JSON.stringify(r.usage) : null;
@@ -318,6 +374,12 @@ const server = http.createServer(async (req, res) => {
           const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
           let parsed = null, parseError = null;
           try { parsed = JSON.parse(cleaned); } catch (e) { parseError = String(e); }
+          // R-0024: whatever the model said about user_note is discarded and the stored
+          // note is substituted verbatim. The model may USE the note; it may not edit it.
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            if ('user_note' in parsed) log(`NOTE MODEL OVERRIDE DISCARDED: ${JSON.stringify(parsed.user_note)}`);
+            parsed.user_note = user_note;
+          }
           const errors = parsed ? validate(parsed, SCHEMA_VERSION) : [`JSON.parse failed: ${parseError}`];
           status = errors.length === 0 ? 'valid' : 'invalid';
           if (status === 'valid') record_json = JSON.stringify(parsed);
@@ -327,10 +389,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         const info = db.prepare(`INSERT INTO records
-          (original_sha256, derived_sha256, received_at, model, status, record_json, raw_response, usage_json, cost_usd, elapsed_ms)
-          VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+          (original_sha256, derived_sha256, received_at, model, status, record_json, raw_response, usage_json, cost_usd, elapsed_ms,
+           user_note_text, user_note_source, audio_sha256, transcript_model)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
             stored.sha256, derived.sha256, received_at, MODEL, status,
-            record_json, raw_response, usage_json, cost, elapsed_ms);
+            record_json, raw_response, usage_json, cost, elapsed_ms,
+            user_note.text, user_note.source, user_note.audio_sha256, user_note.transcript_model);
         log(`ROW id=${info.lastInsertRowid} status=${status} original_sha256=${stored.sha256} cost_usd=${cost}`);
 
         if (/multipart\/form-data/i.test(req.headers['content-type'] || '')) {
