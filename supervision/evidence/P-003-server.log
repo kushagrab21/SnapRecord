@@ -44,3 +44,18 @@
 [2026-09-12T05:53:25.097Z] EXTRACT sha256=70480f7e3e43 model=google/gemini-3.8-flash status=valid elapsed_ms=22117 cost_usd=0.012411 tokens=2383/2833
 [2026-09-12T05:53:25.102Z] ROW id=4 status=valid original_sha256=70480f7e3e4308bd7b9bcbe2b6a047563065930fb9f4baa84e1d51d3e4c99df6 cost_usd=0.012411
 [2026-09-12T05:53:25.122Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:55:51.419Z] SnapRecord listening on 0.0.0.0:8788  db=data/snaprecord.sqlite  rows=4
+[2026-09-12T05:55:51.420Z] OPEN ON PHONE: http://192.168.100.104:8788/   (interface en0)
+[2026-09-12T05:55:51.429Z] HTTPS listening on 0.0.0.0:8789
+[2026-09-12T05:55:51.429Z] ASK THE USER: open https://192.168.100.104:8789/ in Safari (not the Google app), accept the certificate warning, and tell me exactly what you saw.
+[2026-09-12T05:55:53.408Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:55:53.423Z] REQ GET / remote=127.0.0.1 len=- ct=- ua="curl/8.7.1"
+[2026-09-12T05:56:21.244Z] REQ POST /upload remote=127.0.0.1 len=1889883 ct=image/jpeg ua="node"
+[2026-09-12T05:56:21.246Z] BODY framed image=1864421 audio=25454 mime=audio/mp4
+[2026-09-12T05:56:21.269Z] UPLOAD sha256=992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270 bytes=1864421 4032x3024 content-type=image/jpeg derived=4e5e520b2704 remote=127.0.0.1
+[2026-09-12T05:56:21.269Z] AUDIO sha256=f4788beb967d8252a175949fb1ad64db09b2203ca2b5474338079e3f784d32ac bytes=25454 mime=audio/mp4 stored_as=data/audio/f4788beb967d8252a175949fb1ad64db09b2203ca2b5474338079e3f784d32ac.m4a
+[2026-09-12T05:56:26.807Z] TRANSCRIBE model=google/gemini-3.8-flash format=mp4 ok=true elapsed_ms=5538 cost_usd=0.00044325 text="This is the ceiling air conditioning unit above the meeting room. Serial plate faces the wall."
+[2026-09-12T05:56:26.808Z] NOTE source=transcription chars=94 audio=f4788beb967d8252a175949fb1ad64db09b2203ca2b5474338079e3f784d32ac text="This is the ceiling air conditioning unit above the meeting room. Serial plate faces the wall."
+[2026-09-12T05:56:58.428Z] EXTRACT sha256=992e8692a142 model=google/gemini-3.8-flash status=valid elapsed_ms=31618 cost_usd=0.0179655 tokens=2394/4312
+[2026-09-12T05:56:58.432Z] COST transcription=0.00044325 added to row 5
+[2026-09-12T05:56:58.433Z] ROW id=5 status=valid original_sha256=992e8692a142f2f421e31ee4460adeccd567be17ee243fc5e46ceba49b98a270 cost_usd=0.0179655

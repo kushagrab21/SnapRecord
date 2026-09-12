@@ -4,16 +4,20 @@
 // Zero dependencies (R-0020): node:http, node:sqlite, macOS sips.
 //   node server/index.mjs
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { storeCapture, deriveCapture, dims, sha256File, CAPTURES, DERIVED, MAX_EDGE, ROOT } from '../scripts/store.mjs';
+import { storeCapture, storeAudio, deriveCapture, dims, sha256File, CAPTURES, DERIVED, AUDIO, MAX_EDGE, ROOT } from '../scripts/store.mjs';
 import { validate } from '../scripts/validate.mjs';
 import { promptFor } from '../scripts/prompt.mjs';
+import { transcribe } from '../scripts/transcribe.mjs';
 
 const PORT = 8788;
+const HTTPS_PORT = 8789;                          // P-005 Tier 2: getUserMedia needs a secure origin
+const CERT_DIR = path.join(ROOT, 'data', 'cert');  // sh scripts/make-cert.sh
 const MODEL = 'google/gemini-3.8-flash';
 const SCHEMA_VERSION = 'v2';               // schema/item.v2.json, see scripts/prompt.mjs
 const SPEND_CAP_USD = 0.20;                       // P-003/P-005 boundary
@@ -252,10 +256,48 @@ function renderPage(rows) {
   <input name="photo" type="file" accept="image/*" capture="environment" required>
   <textarea name="note" id="note" placeholder="Say or type what this is"></textarea>
   <p class="sub" style="margin:6px 0 0">Tap the microphone on your keyboard to dictate. Stored word for word.</p>
+  <button id="rec" type="button" hidden>Hold to record</button>
+  <p id="recmsg" class="sub" style="margin:6px 0 0" hidden></p>
   <button id="go" type="submit">Extract record</button>
   <p id="working" class="sub" style="margin:10px 0 0" hidden>Uploading and extracting — this takes about 10 seconds. Keep this page open.</p>
 </form>
 <script>
+ // --- P-005 Tier 2: recording, shown only where the browser will allow it ---
+ // getUserMedia exists only on a secure origin, so over plain HTTP this button
+ // never appears and dictation (Tier 1) is the whole story.
+ var audioBlob=null,mediaRec=null,chunks=[];
+ var rec=document.getElementById('rec'),recmsg=document.getElementById('recmsg');
+ if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder){
+   rec.hidden=false;
+   var start=function(e){
+     e.preventDefault();
+     if(mediaRec&&mediaRec.state==='recording')return;
+     navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+       chunks=[];
+       // no mime is requested: iOS gives audio/mp4, others audio/webm. Whatever
+       // it hands over is what gets stored.
+       mediaRec=new MediaRecorder(stream);
+       mediaRec.ondataavailable=function(ev){if(ev.data&&ev.data.size)chunks.push(ev.data);};
+       mediaRec.onstop=function(){
+         audioBlob=new Blob(chunks,{type:mediaRec.mimeType||'audio/mp4'});
+         stream.getTracks().forEach(function(t){t.stop();});
+         rec.classList.remove('on'); rec.textContent='Hold to record';
+         recmsg.hidden=false; recmsg.textContent='Recorded '+audioBlob.size+' bytes ('+audioBlob.type+'). It will be sent with the photo.';
+       };
+       mediaRec.start();
+       rec.classList.add('on'); rec.textContent='Recording - release to stop';
+       recmsg.hidden=false; recmsg.textContent='Listening...';
+     }).catch(function(err){
+       recmsg.hidden=false; recmsg.textContent='Microphone unavailable: '+err;
+       fetch('/client-log',{method:'POST',headers:{'content-type':'text/plain'},body:'getUserMedia failed: '+err});
+     });
+   };
+   var stop=function(e){ e.preventDefault(); if(mediaRec&&mediaRec.state==='recording')mediaRec.stop(); };
+   rec.addEventListener('touchstart',start); rec.addEventListener('mousedown',start);
+   rec.addEventListener('touchend',stop);   rec.addEventListener('mouseup',stop);
+   rec.addEventListener('touchcancel',stop); rec.addEventListener('mouseleave',stop);
+ }
+
  var f=document.querySelector('form'),b=document.getElementById('go'),
      w=document.getElementById('working'),inp=f.querySelector('input[type=file]');
  f.addEventListener('submit',function(e){
@@ -268,7 +310,21 @@ function renderPage(rows) {
    // Headers are latin-1 on the wire; base64 carries UTF-8 dictation through intact.
    var h={'content-type':file.type||'application/octet-stream','x-filename':file.name||'photo.jpg'};
    if(note) h['x-user-note']=btoa(String.fromCharCode.apply(null,new TextEncoder().encode(note)));
-   fetch('/upload',{method:'POST',headers:h,body:file})
+
+   // With audio the body is framed: 8-byte big-endian image length, image, audio.
+   var bodyP;
+   if(audioBlob&&audioBlob.size){
+     h['x-audio-mime']=audioBlob.type||'audio/mp4';
+     bodyP=Promise.all([file.arrayBuffer(),audioBlob.arrayBuffer()]).then(function(ab){
+       var img=new Uint8Array(ab[0]),aud=new Uint8Array(ab[1]);
+       var out=new Uint8Array(8+img.length+aud.length);
+       new DataView(out.buffer).setBigUint64(0,BigInt(img.length),false);
+       out.set(img,8); out.set(aud,8+img.length);
+       return out;
+     });
+   } else { bodyP=Promise.resolve(file); }
+
+   bodyP.then(function(body){ return fetch('/upload',{method:'POST',headers:h,body:body}); })
     .then(function(r){return r.text();})
     .then(function(t){ w.textContent=t+' - reloading'; location.reload(); })
     .catch(function(err){ w.textContent='Upload failed: '+err; b.disabled=false; b.textContent='Extract record'; });
@@ -326,9 +382,27 @@ const server = http.createServer(async (req, res) => {
           catch (e) { log(`NOTE DECODE FAILED ${e}`); }
         }
 
+        // P-005 Tier 2b body format, used only when X-Audio-Mime is present:
+        //   [8 bytes, big-endian, length of the image][image bytes][audio bytes]
+        // The simplest framing that survives a raw fetch body; without the header
+        // the body is the image alone, exactly as P-003 left it.
+        const audioMime = req.headers['x-audio-mime'] ? String(req.headers['x-audio-mime']) : null;
+        let imageBuf = raw, audioBuf = null;
+        if (!isMultipart && audioMime && raw.length > 8) {
+          const imgLen = Number(raw.readBigUInt64BE(0));
+          if (imgLen > 0 && 8 + imgLen <= raw.length) {
+            imageBuf = raw.subarray(8, 8 + imgLen);
+            audioBuf = raw.subarray(8 + imgLen);
+            if (audioBuf.length === 0) audioBuf = null;
+            log(`BODY framed image=${imgLen} audio=${audioBuf ? audioBuf.length : 0} mime=${audioMime}`);
+          } else {
+            log(`BODY FRAME REJECTED imgLen=${imgLen} total=${raw.length} — treating the whole body as the image`);
+          }
+        }
+
         const part = isMultipart
           ? firstFilePart(raw, ct)
-          : (raw.length ? { buf: raw, contentType: ct, filename: req.headers['x-filename'] || 'photo.jpg' } : null);
+          : (imageBuf.length ? { buf: imageBuf, contentType: ct, filename: req.headers['x-filename'] || 'photo.jpg' } : null);
         if (!part) {
           log(`UPLOAD REJECTED: no file part. bytes=${raw.length} content-type=${req.headers['content-type']}`);
           res.writeHead(400, { 'content-type': 'text/plain' });
@@ -355,7 +429,36 @@ const server = http.createServer(async (req, res) => {
           audio_sha256: null,
           transcript_model: null,
         };
-        log(`NOTE source=${user_note.source} chars=${noteText.length} text=${JSON.stringify(noteText)}`);
+        let transcribe_cost = null;
+
+        // Tier 2: audio bytes stored untouched (R-0025), transcript is the derivative.
+        // A transcription always names the audio it came from (R-0026).
+        if (audioBuf) {
+          const storedAudio = storeAudio(audioBuf, {
+            contentType: audioMime,
+            userAgent: req.headers['user-agent'],
+            receivedAt: received_at,
+            note: 'P-005 Tier 2 recording',
+          });
+          user_note.audio_sha256 = storedAudio.sha256;
+          log(`AUDIO sha256=${storedAudio.sha256} bytes=${audioBuf.length} mime=${audioMime} stored_as=${storedAudio.sidecar.stored_as}`);
+          try {
+            const t = await transcribe(storedAudio.file);
+            transcribe_cost = t.cost ?? null;
+            log(`TRANSCRIBE model=${t.model} format=${t.format} ok=${t.ok} elapsed_ms=${t.elapsed_ms} cost_usd=${t.cost} ` +
+                (t.ok ? `text=${JSON.stringify(t.text)}` : `error=${t.error}`));
+            if (t.ok) {
+              user_note.text = t.text;              // verbatim (R-0024)
+              user_note.source = 'transcription';
+              user_note.transcript_model = t.model;
+            } else {
+              log('TRANSCRIBE FAILED — audio is kept and hash-linked, but the note falls back to the typed text');
+            }
+          } catch (e) {
+            log(`TRANSCRIBE THREW ${e?.stack || e}`);
+          }
+        }
+        log(`NOTE source=${user_note.source} chars=${user_note.text.length} audio=${user_note.audio_sha256} text=${JSON.stringify(user_note.text)}`);
 
         const spent = spentSoFar();
         let status, record_json = null, raw_response, usage_json = null, cost = null, elapsed_ms = 0;
@@ -395,6 +498,11 @@ const server = http.createServer(async (req, res) => {
             stored.sha256, derived.sha256, received_at, MODEL, status,
             record_json, raw_response, usage_json, cost, elapsed_ms,
             user_note.text, user_note.source, user_note.audio_sha256, user_note.transcript_model);
+        if (transcribe_cost != null) {
+          // the cap counts every model call, transcription included
+          db.prepare('UPDATE records SET cost_usd = COALESCE(cost_usd,0) + ? WHERE id = ?').run(transcribe_cost, info.lastInsertRowid);
+          log(`COST transcription=${transcribe_cost} added to row ${info.lastInsertRowid}`);
+        }
         log(`ROW id=${info.lastInsertRowid} status=${status} original_sha256=${stored.sha256} cost_usd=${cost}`);
 
         if (/multipart\/form-data/i.test(req.headers['content-type'] || '')) {
@@ -428,6 +536,31 @@ const server = http.createServer(async (req, res) => {
       'etag': `"${sha}"`,
       'cache-control': 'public, max-age=31536000, immutable',
     });
+    return res.end(buf);
+  }
+
+  // P-005 ruling 13 (R-0026): a Tier 2 failure has to be recorded, and the phone
+  // cannot be read over someone's shoulder. The page posts its own errors here.
+  if (req.method === 'POST' && url.pathname === '/client-log') {
+    const cs = [];
+    req.on('data', c => cs.push(c));
+    req.on('end', () => {
+      log(`CLIENT ua="${req.headers['user-agent'] || ''}" ${Buffer.concat(cs).toString('utf8').slice(0, 500)}`);
+      res.writeHead(204).end();
+    });
+    return;
+  }
+
+  // P-005: the stored audio, exact bytes, for anyone verifying the hash.
+  if (req.method === 'GET' && url.pathname.startsWith('/audio/')) {
+    const sha = url.pathname.slice('/audio/'.length);
+    if (!/^[0-9a-f]{64}$/.test(sha)) { res.writeHead(400); return res.end('bad sha'); }
+    const file = fs.existsSync(AUDIO) ? fs.readdirSync(AUDIO).find(f => f.startsWith(sha) && !f.endsWith('.json')) : null;
+    if (!file) { res.writeHead(404); return res.end('not found'); }
+    const buf = fs.readFileSync(path.join(AUDIO, file));
+    let mime = 'application/octet-stream';
+    try { mime = JSON.parse(fs.readFileSync(path.join(AUDIO, sha + '.json'), 'utf8')).content_type || mime; } catch {}
+    res.writeHead(200, { 'content-type': mime, 'content-length': String(buf.length), 'etag': `"${sha}"` });
     return res.end(buf);
   }
 
@@ -483,6 +616,24 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404).end('not found');
 });
 
+// P-005 Tier 2a: the same app, additionally on HTTPS, because MediaRecorder is
+// gated on a secure origin. Absent a certificate the product is unchanged.
+function startHttps(handler) {
+  const certPath = path.join(CERT_DIR, 'cert.pem'), keyPath = path.join(CERT_DIR, 'key.pem');
+  if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
+    log(`NO CERT at ${path.relative(ROOT, CERT_DIR)} — HTTPS not started. Run: sh scripts/make-cert.sh`);
+    return;
+  }
+  const s = https.createServer({ cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) }, handler);
+  s.on('error', e => log(`HTTPS FAILED TO LISTEN ${e?.message || e}`));
+  s.listen(HTTPS_PORT, '0.0.0.0', () => {
+    log(`HTTPS listening on 0.0.0.0:${HTTPS_PORT}`);
+    for (const [name, addrs] of Object.entries(os.networkInterfaces()))
+      for (const a of addrs || []) if (a.family === 'IPv4' && !a.internal)
+        log(`ASK THE USER: open https://${a.address}:${HTTPS_PORT}/ in Safari (not the Google app), accept the certificate warning, and tell me exactly what you saw.`);
+  });
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   log(`SnapRecord listening on 0.0.0.0:${PORT}  db=${path.relative(ROOT, DB_PATH)}  rows=${allRows().length}`);
   const ips = [];
@@ -490,4 +641,5 @@ server.listen(PORT, '0.0.0.0', () => {
     for (const a of addrs || []) if (a.family === 'IPv4' && !a.internal) ips.push({ name, address: a.address });
   for (const ip of ips) log(`OPEN ON PHONE: http://${ip.address}:${PORT}/   (interface ${ip.name})`);
   if (!ips.length) log('NO LAN IP FOUND');
+  startHttps(server.listeners('request')[0]);
 });

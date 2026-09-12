@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const CAPTURES = path.join(ROOT, 'data', 'captures');
 export const DERIVED = path.join(ROOT, 'data', 'derived');
+export const AUDIO = path.join(ROOT, 'data', 'audio');
 export const SIDECAR_EVIDENCE = path.join(ROOT, 'supervision', 'evidence', 'capture-sidecars');
 export const MAX_EDGE = 1568;
 
@@ -62,6 +63,38 @@ export function storeCapture(buf, meta = {}) {
   if (!fs.existsSync(sidecarPath)) fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2));
   fs.copyFileSync(sidecarPath, path.join(SIDECAR_EVIDENCE, hash + '.json'));
   return { sha256: hash, ext, file, sidecarPath, sidecar: JSON.parse(fs.readFileSync(sidecarPath, 'utf8')), already };
+}
+
+// P-005 ruling 12 (R-0025): recorded audio follows the same rule as pixels — the
+// exact bytes the browser handed over, stored once at their own hash, with a
+// sidecar beside them. The transcript is a derivative and lives in the record.
+const AUDIO_EXT = { 'audio/mp4': '.m4a', 'audio/m4a': '.m4a', 'audio/aac': '.aac', 'audio/mpeg': '.mp3',
+                    'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/wav': '.wav', 'audio/x-wav': '.wav' };
+
+export function storeAudio(buf, meta = {}) {
+  fs.mkdirSync(AUDIO, { recursive: true });
+  fs.mkdirSync(SIDECAR_EVIDENCE, { recursive: true });
+  const hash = sha256(buf);
+  const base = String(meta.contentType || '').split(';')[0].trim().toLowerCase();
+  const ext = AUDIO_EXT[base] || '.bin';
+  const file = path.join(AUDIO, hash + ext);
+  if (!fs.existsSync(file)) {
+    const fd = fs.openSync(file, 'wx');           // never rewritten, as with captures
+    try { fs.writeFileSync(fd, buf); } finally { fs.closeSync(fd); }
+  }
+  const sidecar = {
+    sha256: hash,
+    stored_as: path.relative(ROOT, file),
+    bytes: buf.length,
+    content_type: meta.contentType ?? null,       // whatever MediaRecorder chose; not normalised
+    user_agent: meta.userAgent ?? null,
+    received_at: meta.receivedAt ?? new Date().toISOString(),
+    note: meta.note ?? null,
+  };
+  const sidecarPath = path.join(AUDIO, hash + '.json');
+  if (!fs.existsSync(sidecarPath)) fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2));
+  fs.copyFileSync(sidecarPath, path.join(SIDECAR_EVIDENCE, hash + '.json'));
+  return { sha256: hash, ext, file, sidecarPath, sidecar, mime: base };
 }
 
 // Produces the inference-only derivative. Reads the original; never writes to it.
